@@ -53,8 +53,9 @@ class SQLUtility {
   // Execute sql file and diff with ans file
   // @param sqlFile The given sqlFile which is relative path to test root dir
   // @param ansFile The given ansFile which is relative path to test root dir
+  // @param initFile The given initFile (used by gpdiff.pl) which is relative path to test root dir
   // @return void
-  void execSQLFile(const std::string &sqlFile, const std::string &ansFile);
+  void execSQLFile(const std::string &sqlFile, const std::string &ansFile, const std::string &initFile = "");
 
   // Get PSQL connection: do not suggest to use
   // @return PSQL raw pointer
@@ -68,6 +69,13 @@ class SQLUtility {
   void setGUCValue(const std::string &guc, const std::string &value);
   // Get GUC value
   std::string getGUCValue(const std::string &guc);
+
+  // execute expect error message
+  // @param sql the given sql command
+  // @param errmsg the expected sql error message
+  // @return void
+  void executeExpectErrorMsgStartWith(const std::string &sql, const std::string &errmsg);
+
 
  private:
   std::unique_ptr<hawq::test::PSQL> getConnection();

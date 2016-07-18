@@ -739,8 +739,6 @@ static void check_keep_hash_and_external_table(
 		{
 			context->keep_hash = true;
 			context->resultRelationHashSegNum = targetPolicy->bucketnum;
-			pfree(targetPolicy);
-			return;
 		}
 		pfree(targetPolicy);
 	}
@@ -752,7 +750,6 @@ static void check_keep_hash_and_external_table(
 	{
 		context->keep_hash = true;
 		context->resultRelationHashSegNum = intoPolicy->bucketnum;
-		return;
 	}
 
 	foreach(lc, context->rtc_context.range_tables)
@@ -857,6 +854,10 @@ int64 get_block_locations_and_claculte_table_size(split_to_segment_mapping_conte
 
 	MemoryContextSwitchTo(context->datalocality_memorycontext);
 
+	if (ActiveSnapshot == NULL)
+	{
+		ActiveSnapshot = GetTransactionSnapshot();
+	}
 	ActiveSnapshot = CopySnapshot(ActiveSnapshot);
 	ActiveSnapshot->curcid = GetCurrentCommandId();
 
@@ -4217,7 +4218,7 @@ calculate_planner_segment_num(Query *query, QueryResourceLife resourceLife,
 			int maxTargetSegmentNumber = 0;
 			/* we keep resultRelationHashSegNum in the highest priority*/
 			if (context.resultRelationHashSegNum != 0) {
-				if ((context.resultRelationHashSegNum != context.externTableForceSegNum
+				if ((context.resultRelationHashSegNum < context.externTableForceSegNum
 						&& context.externTableForceSegNum != 0)
 						|| (context.resultRelationHashSegNum < context.externTableLocationSegNum)) {
 					cleanup_allocation_algorithm(&context);

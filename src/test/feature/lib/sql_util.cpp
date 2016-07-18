@@ -62,6 +62,12 @@ string SQLUtility::execute(const string &sql, bool check) {
   return conn.get()->getLastResult();
 }
 
+void SQLUtility::executeExpectErrorMsgStartWith(const std::string &sql,
+                                                const std::string &errmsg) {
+  std::string errout = execute(sql, false);
+  EXPECT_STREQ(errmsg.c_str(), errout.substr(0, errmsg.size()).c_str());
+}
+
 void SQLUtility::executeIgnore(const string &sql) {
   conn->runSQLCommand("SET SEARCH_PATH=" + schemaName + ";" + sql);
   EXPECT_NE(conn.get(), nullptr);
@@ -86,7 +92,10 @@ void SQLUtility::query(const string &sql, const string &expectStr) {
 }
 
 void SQLUtility::execSQLFile(const string &sqlFile,
-                             const string &ansFile) {
+                             const string &ansFile,
+                             const string &initFile) {
+  FilePath fp;
+
   // do precheck for sqlFile & ansFile
   if (hawq::test::startsWith(sqlFile, "/") ||
       hawq::test::startsWith(ansFile, "/"))
@@ -95,7 +104,7 @@ void SQLUtility::execSQLFile(const string &sqlFile,
   string ansFileAbsPath = testRootPath + "/" + ansFile;
   if (!std::ifstream(ansFileAbsPath))
     ASSERT_TRUE(false) << ansFileAbsPath << " doesn't exist";
-  FilePath fp = splitFilePath(ansFileAbsPath);
+  fp = splitFilePath(ansFileAbsPath);
   // double check to avoid empty fileBaseName
   if (fp.fileBaseName.empty())
     ASSERT_TRUE(false) << ansFileAbsPath << " is invalid";
@@ -108,8 +117,24 @@ void SQLUtility::execSQLFile(const string &sqlFile,
   conn->setOutputFile(outFileAbsPath);
   EXPECT_EQ(0, conn->runSQLFile(newSqlFile).getLastStatus());
   conn->resetOutput();
-  EXPECT_FALSE(conn->checkDiff(ansFileAbsPath, outFileAbsPath, true));
-  if (conn->checkDiff(ansFileAbsPath, outFileAbsPath, true) == false) {
+
+  // initFile if any
+  string initFileAbsPath;
+  if (!initFile.empty()) {
+    initFileAbsPath = testRootPath + "/" + initFile;
+    if (!std::ifstream(initFileAbsPath))
+      ASSERT_TRUE(false) << initFileAbsPath << " doesn't exist";
+    fp = splitFilePath(initFileAbsPath);
+    // double check to avoid empty fileBaseName
+    if (fp.fileBaseName.empty())
+      ASSERT_TRUE(false) << initFileAbsPath << " is invalid";
+  } else {
+    initFileAbsPath = "";
+  }
+
+  bool is_sql_ans_diff = conn->checkDiff(ansFileAbsPath, outFileAbsPath, true, initFileAbsPath);
+  EXPECT_FALSE(is_sql_ans_diff);
+  if (is_sql_ans_diff == false) {
     // no diff, continue to delete the generated sql file
     if (remove(newSqlFile.c_str()))
       ASSERT_TRUE(false) << "Error deleting file " << newSqlFile;

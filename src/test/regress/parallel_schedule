@@ -61,10 +61,8 @@ ignore: returning
 ignore: stats
 ignore: tablespace
 test: gpdiffcheck
-test: exttab1
 test: resource_queue
 test: gptokencheck
-test: gpcopy
 test: sreh
 test: olap_setup
 test: olap_group

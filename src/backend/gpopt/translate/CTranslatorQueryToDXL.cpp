@@ -47,7 +47,6 @@
 #include "gpopt/translate/CQueryMutators.h"
 #include "gpopt/translate/CTranslatorUtils.h"
 #include "gpopt/translate/CTranslatorQueryToDXL.h"
-#include "gpopt/translate/CTranslatorPlStmtToDXL.h"
 #include "gpopt/translate/CTranslatorDXLToPlStmt.h"
 #include "gpopt/translate/CTranslatorRelcacheToDXL.h"
 
@@ -431,15 +430,6 @@ CTranslatorQueryToDXL::CheckSupportedCmdType
 		}
 		
 		// supported: regular select or CTAS when it is enabled
-		return;
-	}
-
-	if (CMD_INSERT == pquery->commandType || CMD_DELETE == pquery->commandType || CMD_UPDATE == pquery->commandType)
-	{
-		if (NULL != pquery->resultRelations)
-		{
-			GPOS_RAISE(gpdxl::ExmaDXL, gpdxl::ExmiQuery2DXLUnsupportedFeature, GPOS_WSZ_LIT("DML on partitioned tables"));
-		}
 		return;
 	}
 

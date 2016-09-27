@@ -98,10 +98,10 @@ public abstract class HAWQInputFormatAccessor extends Plugin implements
 
         switch ( tableFormat ) {
             case AO:
-                reader = aoInputFormat.createRecordReader(split, 
+                return aoInputFormat.createRecordReader(split, 
                     new TaskAttemptContextImpl(jobConf, new TaskAttemptID()));
             case Parquet:
-                reader = parquetInputFormat.createRecordReader(split, 
+                return parquetInputFormat.createRecordReader(split, 
                     new TaskAttemptContextImpl(jobConf, new TaskAttemptID()));
             default:
                 throw new IOException("invalid table format: " + tableFormat);

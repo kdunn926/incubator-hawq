@@ -74,7 +74,7 @@ public enum DataType {
     TIMESTAMPTZ(1184),
     INTERVAL(1186),
     TIMETZ(1266),
-    ZPBIT(1560),
+    BIT(1560),
     VARBIT(1562),
     XML(142),
     MACADDR(829),

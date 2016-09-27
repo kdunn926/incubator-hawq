@@ -76,6 +76,8 @@ public enum DataType {
     TIMETZ(1266),
     ZPBIT(1560),
     VARBIT(1562),
+    XML(142),
+    MACADDR(829),
     UNSUPPORTED_TYPE(-1);
 
     private static final Map<Integer, DataType> lookup = new HashMap<>();

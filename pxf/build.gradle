@@ -312,6 +312,40 @@ project('pxf-hdfs') {
     }
 }
 
+project('pxf-hawqinputformat1x') {
+    dependencies {
+        compile(project(':pxf-api'))
+        compile(project(':pxf-hdfs'))
+        compile "org.apache.hadoop:hadoop-mapreduce-client-core:$hadoopVersion"
+        compile "org.apache.hadoop:hadoop-common:$hadoopVersion"
+        compile "org.apache.hadoop:hadoop-hdfs:$hadoopVersion"
+        compile "com.pivotal.hawq:hawq-hadoop:1.1.0"
+        compile "com.pivotal.hawq:hawq-mapreduce-ao:1.1.0"
+        compile "com.pivotal.hawq:hawq-mapreduce-common:1.1.0"
+        compile "com.pivotal.hawq:hawq-mapreduce-parquet:1.1.0"
+        compile "com.pivotal.hawq:hawq-mapreduce-tool:1.1.0"
+    }
+
+    ospackage {
+        summary = 'HAWQ Extension Framework (PXF), HAWQInputFormat plugin'
+        description = 'Querying data stored in HAWQ 1.x format'
+        packager = ' '
+        packageGroup = 'Development/Libraries'
+        release = buildNumber() + '.' + project.osFamily
+        buildHost = ' '
+
+        requires('pxf-service', project.version, GREATER | EQUAL)
+        requires('hadoop', "$hadoopVersion", GREATER | EQUAL)
+        requires('hadoop-mapreduce', "$hadoopVersion", GREATER | EQUAL)
+
+        from(jar.outputs.files) {
+            into "/usr/lib/pxf-${project.version}"
+        }
+
+        link("/usr/lib/pxf-${project.version}/${project.name}.jar", "${project.name}-${project.version}.jar")
+    }
+}
+
 project('pxf-hive') {
     dependencies {
         compile(project(':pxf-hdfs'))

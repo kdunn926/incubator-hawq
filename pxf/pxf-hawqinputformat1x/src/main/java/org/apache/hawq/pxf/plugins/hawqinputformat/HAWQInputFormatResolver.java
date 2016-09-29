@@ -112,7 +112,7 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
                 ret = addOneFieldToRecord(record, DataType.BOOLEAN, value);
                 break;
             case "bit":
-                ret = addOneFieldToRecord(record, DataType.ZPBIT, value);
+                ret = addOneFieldToRecord(record, DataType.BIT, value);
                 break;
             case "varbit":
                 ret = addOneFieldToRecord(record, DataType.VARBIT, value);
@@ -187,22 +187,18 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
             case "polygon":
                 ret = addOneFieldToRecord(record, DataType.POLYGON, value);
                 break;
-            /*
             case "macaddr":
                 ret = addOneFieldToRecord(record, DataType.MACADDR, value);
                 break;
-            */
             case "inet":
                 ret = addOneFieldToRecord(record, DataType.INET, value);
                 break;
             case "cidr":
                 ret = addOneFieldToRecord(record, DataType.CIDR, value);
                 break;
-            /*
             case "xml":
                 ret = addOneFieldToRecord(record, DataType.XML, value);
                 break;
-            */
             default:
                 break;
         }
@@ -211,7 +207,7 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
 
     /**
      * Creates the {@link OneField} object and adds it to the output {@code List<OneField>}
-     * record. 
+     * record. Binary types are handled accordingly (src/backend/cdb/cdbparquetstoragewrite.c)
      *
      * @param record list of fields to be populated
      * @param gpdbWritableType field type
@@ -224,6 +220,20 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
         oneField.type = gpdbWritableType.getOID();
         switch (gpdbWritableType) {
             case BYTEA:
+        	case BIT:
+        	case VARBIT:
+        	case NUMERIC:
+        	case NAME:
+        	case CHAR:
+        	case BPCHAR:
+        	case VARCHAR:
+        	case TEXT:
+        	case XML:
+        	case TIMETZ:
+        	case INTERVAL:
+        	case MACADDR:
+        	case INET:
+        	case CIDR:
                 if (val instanceof ByteBuffer) {
                     oneField.val = ((ByteBuffer) val).array();
                 } else {

@@ -53,7 +53,7 @@ public class HAWQInputFormatFragmenter extends Fragmenter {
      * Constructs an HdfsDataFragmenter object.
      *
      * @param md all input parameters coming from the client
-     * @throws IOException 
+     * @throws IOException if metadata file could not be retrieved or parsed 
      */
     public HAWQInputFormatFragmenter(InputData md) throws IOException {
         super(md);

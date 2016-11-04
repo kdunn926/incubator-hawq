@@ -50,7 +50,7 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
      * passed by the user
      *
      * @param input all input parameters coming from the client
-     * @throws IOException if Avro schema could not be retrieved or parsed
+     * @throws IOException if metadata file could not be retrieved or parsed
      */
     public HAWQInputFormatResolver(InputData input) throws IOException {
         super(input);

@@ -59,8 +59,7 @@ public abstract class HAWQInputFormatAccessor extends Plugin implements
      * Constructs an HAWQInputFormatAccessor 
      *
      * @param input all input parameters coming from the client request
-     * @param inFormat the HDFS {@link InputFormat} the caller wants to use
-     * @throws IOException 
+     * @throws IOException if Hadoop XML files could not be retrieved or parsed 
      */
     public HAWQInputFormatAccessor(InputData input) throws IOException {
         super(input);
@@ -90,7 +89,7 @@ public abstract class HAWQInputFormatAccessor extends Plugin implements
      * @return a recordreader to be used for reading the data records of the
      *         split
      * @throws IOException if recordreader could not be created
-     * @throws InterruptedException 
+     * @throws InterruptedException if the task attempt is interrupted 
      */
     protected Object getReader(JobConf jobConf, InputSplit split)
             throws IOException, InterruptedException {

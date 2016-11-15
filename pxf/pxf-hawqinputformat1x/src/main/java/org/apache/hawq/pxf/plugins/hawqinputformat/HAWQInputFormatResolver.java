@@ -20,17 +20,20 @@ package org.apache.hawq.pxf.plugins.hawqinputformat;
  */
 
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.List;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import org.apache.hawq.pxf.api.OneField;
 import org.apache.hawq.pxf.api.OneRow;
 import org.apache.hawq.pxf.api.ReadResolver;
 import org.apache.hawq.pxf.api.io.DataType;
 import org.apache.hawq.pxf.api.utilities.InputData;
 import org.apache.hawq.pxf.api.utilities.Plugin;
-
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.LinkedList;
-import java.util.List;
 
 import com.pivotal.hawq.mapreduce.HAWQRecord;
 import com.pivotal.hawq.mapreduce.schema.HAWQField;
@@ -42,6 +45,8 @@ import com.pivotal.hawq.mapreduce.schema.HAWQSchema;
  * were serialized in the HAWQ internal table format.
  */
 public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
+
+    private static final Log LOG = LogFactory.getLog(HAWQInputFormatResolver.class);
 
     /**
      * Constructs an HAWQInputFormatResolver. Initializes Avro data structure: the Avro
@@ -55,6 +60,7 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
     public HAWQInputFormatResolver(InputData input) throws IOException {
         super(input);
 
+        LOG.info("Enter Resolver()");
         //fformat = new HAWQInputFormat();
 
         //String metadataFile = HdfsUtilities.absoluteDataPath(md.getDataSource());

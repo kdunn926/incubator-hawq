@@ -19,41 +19,51 @@ package org.apache.hawq.pxf.plugins.hawqinputformat;
  * under the License.
  */
 
+import java.io.IOException;
+import java.util.LinkedList;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.RecordReader;
+import org.apache.hadoop.mapred.JobConf;
+import org.apache.hadoop.mapred.FileSplit;
+import org.apache.hadoop.mapreduce.InputSplit;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl;
+import org.apache.hadoop.mapreduce.TaskAttemptID;
+import org.apache.hawq.pxf.plugins.hdfs.HdfsSplittableDataAccessor;
 
 import org.apache.hawq.pxf.api.OneRow;
 import org.apache.hawq.pxf.api.ReadAccessor;
 import org.apache.hawq.pxf.api.utilities.InputData;
 import org.apache.hawq.pxf.api.utilities.Plugin;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.mapreduce.RecordReader;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.Job;
-import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl;
-import org.apache.hadoop.mapreduce.TaskAttemptID;
+import org.apache.hawq.pxf.plugins.hdfs.utilities.HdfsUtilities;
 
 import com.pivotal.hawq.mapreduce.HAWQRecord;
+import com.pivotal.hawq.mapreduce.HAWQInputFormat;
 import com.pivotal.hawq.mapreduce.ao.HAWQAOInputFormat;
+import com.pivotal.hawq.mapreduce.ao.HAWQAORecordReader;
 import com.pivotal.hawq.mapreduce.metadata.HAWQTableFormat;
-import com.pivotal.hawq.mapreduce.parquet.HAWQParquetInputFormat;
-
-import java.io.IOException;
+import com.pivotal.hawq.mapreduce.metadata.HAWQAOTableMetadata;
+import com.pivotal.hawq.mapreduce.metadata.MetadataAccessor;
 
 /**
  * Accessor for accessing a split-able HAWQ 1.x data sources. 
  */
-public abstract class HAWQInputFormatAccessor extends Plugin implements
-        ReadAccessor {
+public class HAWQInputFormatAccessor extends HdfsSplittableDataAccessor {
+    private static final Log LOG = LogFactory.getLog(HAWQInputFormatAccessor.class);
+
     private static final String TABLE_FORMAT = "mapreduce.hawq.table.format";
 
-    protected Configuration conf = null;
-    protected RecordReader<Void, HAWQRecord> reader = null;
-    protected JobConf jobConf = null;
-    protected Job jobContext;
+    private Configuration configuration;
+    private JobConf jobConf;
+    private Job jobContext;
 
-    private HAWQAOInputFormat aoInputFormat = new HAWQAOInputFormat();
-    private HAWQParquetInputFormat parquetInputFormat = 
-        new HAWQParquetInputFormat();
+    //protected RecordReader<Void, HAWQRecord> reader = null;
+
+    private HAWQAOInputFormat aoInputFormat = null; //new HAWQAOInputFormat();
 
     /**
      * Constructs an HAWQInputFormatAccessor 
@@ -61,23 +71,35 @@ public abstract class HAWQInputFormatAccessor extends Plugin implements
      * @param input all input parameters coming from the client request
      * @throws IOException if Hadoop XML files could not be retrieved or parsed 
      */
-    public HAWQInputFormatAccessor(InputData input) throws IOException {
-        super(input);
+    public HAWQInputFormatAccessor(InputData input) throws Exception {
+        super(input, null);
+        LOG.info("Enter Accessor()");
+
+        aoInputFormat = new HAWQAOInputFormat();
 
         // 1. Load Hadoop configuration defined in $HADOOP_HOME/conf/*.xml files
-        conf = new Configuration();
+        configuration = new Configuration();
 
-        // 2. variable required for the splits iteration logic
-        jobConf = new JobConf(conf, HAWQInputFormatAccessor.class);
+        String metadataFile = HdfsUtilities.absoluteDataPath(input.getUserProperty("YAML"));
+        LOG.info("YAML: " + metadataFile);
 
+        HAWQAOTableMetadata tableMetadata = MetadataAccessor.newInstanceUsingFile(metadataFile).getAOMetadata();
+        HAWQAOInputFormat.setInput(configuration, tableMetadata);
+
+        jobConf = new JobConf(configuration, HAWQInputFormatFragmenter.class);
         jobContext = Job.getInstance(jobConf);
+
+        LOG.info("Instantiated Accessor");
+
     }
 
+    /*
     @Override
     public boolean openForRead() throws Exception {
-        /* fopen or similar */
+        // fopen or similar 
         return true;
     }
+    */
 
     /**
      * Specialized accessors will override this method and implement their own
@@ -89,27 +111,29 @@ public abstract class HAWQInputFormatAccessor extends Plugin implements
      * @return a recordreader to be used for reading the data records of the
      *         split
      * @throws IOException if recordreader could not be created
-     * @throws InterruptedException if the task attempt is interrupted 
      */
-    protected Object getReader(JobConf jobConf, InputSplit split)
-            throws IOException, InterruptedException {
-        HAWQTableFormat tableFormat = getTableFormat(jobConf);
 
-        switch ( tableFormat ) {
-            case AO:
-                return aoInputFormat.createRecordReader(split, 
-                    new TaskAttemptContextImpl(jobConf, new TaskAttemptID()));
-            case Parquet:
-                return parquetInputFormat.createRecordReader(split, 
-                    new TaskAttemptContextImpl(jobConf, new TaskAttemptID()));
-            default:
-                throw new IOException("invalid table format: " + tableFormat);
+    @Override
+    protected Object getReader(JobConf jobConf, InputSplit split)
+            throws IOException {
+        try {
+            HAWQAORecordReader reader = new HAWQAORecordReader();
+            reader.initialize((FileSplit) split,
+                new TaskAttemptContextImpl(jobConf, new TaskAttemptID()));
+            return (RecordReader) reader; //new HAWQAORecordReader();
+            //return aoInputFormat.createRecordReader((FileSplit) split, 
+            //    new TaskAttemptContextImpl(conf, new TaskAttemptID()));
+        } catch (InterruptedException e) {
+            return null;
+            //throw new IOException("Unable to instantiate AOInputFormat RecordReader: " + e);
         }
+        
     }
 
     /**
      * Fetches one record from the file. 
      */
+    /*
     @Override
     public OneRow readNextObject() throws Exception {
         if (reader.nextKeyValue()) {
@@ -119,10 +143,12 @@ public abstract class HAWQInputFormatAccessor extends Plugin implements
             return null;
         }
     }
+    */
 
     /**
      * When user finished reading the file, it closes the RecordReader
      */
+    /*
     @Override
     public void closeForRead() throws Exception {
         if (reader != null) {
@@ -138,4 +164,11 @@ public abstract class HAWQInputFormatAccessor extends Plugin implements
         return HAWQTableFormat.valueOf(formatName);
     }
 
+    @Override
+    public boolean isThreadSafe() {
+        return false;
+        //return HdfsUtilities.isThreadSafe(inputData.getDataSource(),
+        //inputData.getUserProperty("COMPRESSION_CODEC"));
+    }
+    */
 }

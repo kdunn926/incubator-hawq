@@ -19,21 +19,35 @@ package org.apache.hawq.pxf.plugins.hawqinputformat;
  * under the License.
  */
 
+import java.io.IOException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
-import org.apache.hawq.pxf.api.Fragment;
-import org.apache.hawq.pxf.api.Fragmenter;
-import org.apache.hawq.pxf.api.FragmentsStats;
-import org.apache.hawq.pxf.api.utilities.InputData;
-import org.apache.hawq.pxf.plugins.hdfs.utilities.HdfsUtilities;
-import com.pivotal.hawq.mapreduce.HAWQInputFormat;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.Job;
 
-import java.io.IOException;
-import java.util.List;
+import org.apache.hawq.pxf.api.Fragment;
+import org.apache.hawq.pxf.api.Fragmenter;
+import org.apache.hawq.pxf.api.FragmentsStats;
+import org.apache.hawq.pxf.api.utilities.InputData;
+import org.apache.hawq.pxf.plugins.hdfs.utilities.HdfsUtilities;
+
+import org.yaml.snakeyaml.Yaml;
+
+import com.pivotal.hawq.mapreduce.ao.file.HAWQAOSplit;
+import com.pivotal.hawq.mapreduce.file.HAWQAOFileStatus;
+import com.pivotal.hawq.mapreduce.HAWQInputFormat;
+import com.pivotal.hawq.mapreduce.metadata.MetadataAccessor;
 
 /**
  * Fragmenter class for HAWQ internal table data resources.
@@ -43,73 +57,63 @@ import java.util.List;
  * locations for each.
  */
 public class HAWQInputFormatFragmenter extends Fragmenter {
+    private static final Log LOG = LogFactory.getLog(HAWQInputFormatFragmenter.class);
+
     private Configuration configuration;
     private JobConf jobConf;
     private Job jobContext;
 
     private HAWQInputFormat fformat;
+    private String metadataFile;
 
     /**
-     * Constructs an HdfsDataFragmenter object.
+     * Constructs a HAWQInputFormatFragmenter object.
      *
      * @param md all input parameters coming from the client
      * @throws IOException if metadata file could not be retrieved or parsed 
      */
-    public HAWQInputFormatFragmenter(InputData md) throws IOException {
+    public HAWQInputFormatFragmenter(InputData md) throws IOException, FileNotFoundException {
         super(md);
 
         configuration = new Configuration();
+
+        LOG.info("YAML: " + md.getUserProperty("YAML"));
+
+        metadataFile = HdfsUtilities.absoluteDataPath(md.getUserProperty("YAML"));
+        HAWQInputFormat.setInput(configuration, metadataFile);
 
         jobConf = new JobConf(configuration, HAWQInputFormatFragmenter.class);
         jobContext = Job.getInstance(jobConf);
 
         fformat = new HAWQInputFormat();
-
-        String metadataFile = HdfsUtilities.absoluteDataPath(md.getDataSource());
-
-        HAWQInputFormat.setInput(configuration, metadataFile);
     }
 
     /**
      * Gets the fragments associated with a HAWQ metadata file (URI file name)
-     * Returns the data fragments in JSON format.
      */
     @Override
     public List<Fragment> getFragments() throws Exception {
-        //String absoluteDataPath = HdfsUtilities.absoluteDataPath(inputData.getDataSource());
         List<InputSplit> splits = fformat.getSplits(jobContext);
 
         for (InputSplit split : splits) {
-            FileSplit fsp = (FileSplit) split;
+            //FileSplit fsp = (FileSplit) split;
 
-            String filepath = fsp.getPath().toUri().getPath();
-            String[] hosts = fsp.getLocations();
+            String filepath = ((HAWQAOSplit) split).getPath().toUri().getPath();
+            String[] hosts = split.getLocations();
 
-            /*
-             * metadata information includes: file split's start, length and
-             * hosts (locations).
-             */
-            byte[] fragmentMetadata = HdfsUtilities.prepareFragmentMetadata(fsp);
-            Fragment fragment = new Fragment(filepath, hosts, fragmentMetadata);
+            //
+            // metadata information includes: file split's start, length and
+            // hosts (locations).
+            //
+            //byte[] fragmentMetadata = HdfsUtilities.prepareFragmentMetadata(split);
+            Fragment fragment = new Fragment(filepath, hosts, new byte[0]);
             fragments.add(fragment);
         }
+
+        LOG.info("Fragmenter returning fragments");
 
         return fragments;
     }
 
-    @Override
-    public FragmentsStats getFragmentsStats() throws Exception {
-        List<InputSplit> splits = fformat.getSplits(jobContext);
-
-        if (splits.isEmpty()) {
-            return new FragmentsStats(0, 0, 0);
-        }
-        long totalSize = 0;
-        for (InputSplit split: splits) {
-            totalSize += split.getLength();
-        }
-        InputSplit firstSplit = splits.get(0);
-        return new FragmentsStats(splits.size(), firstSplit.getLength(), totalSize);
-    }
 
 }

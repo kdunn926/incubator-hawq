@@ -96,8 +96,6 @@ public class HAWQInputFormatFragmenter extends Fragmenter {
         List<InputSplit> splits = fformat.getSplits(jobContext);
 
         for (InputSplit split : splits) {
-            //FileSplit fsp = (FileSplit) split;
-
             String filepath = ((HAWQAOSplit) split).getPath().toUri().getPath();
             String[] hosts = split.getLocations();
 
@@ -109,8 +107,6 @@ public class HAWQInputFormatFragmenter extends Fragmenter {
             Fragment fragment = new Fragment(filepath, hosts, fragmentMetadata);
             fragments.add(fragment);
         }
-
-        LOG.info("Fragmenter returning fragments");
 
         return fragments;
     }

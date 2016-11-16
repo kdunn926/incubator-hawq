@@ -51,14 +51,6 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
 
     private static final Log LOG = LogFactory.getLog(HAWQInputFormatResolver.class);
 
-    /*
-    public static enum PrimitiveType {
-        BOOL, BIT, VARBIT, BYTEA, INT2, INT4, INT8, FLOAT4, FLOAT8, NUMERIC,
-        CHAR, BPCHAR, VARCHAR, TEXT, DATE, TIME, TIMETZ, TIMESTAMP, TIMESTAMPTZ, INTERVAL,
-        POINT, LSEG, BOX, CIRCLE, PATH, POLYGON, MACADDR, INET, CIDR, XML
-    }
-    */
-
     /**
      * Constructs an HAWQInputFormatResolver. Initializes Avro data structure: the Avro
      * record - fields information and the Avro record reader. All Avro data is
@@ -70,13 +62,6 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
      */
     public HAWQInputFormatResolver(InputData input) throws IOException {
         super(input);
-
-        LOG.info("Enter Resolver()");
-        //fformat = new HAWQInputFormat();
-
-        //String metadataFile = HdfsUtilities.absoluteDataPath(md.getDataSource());
-
-        //HAWQInputFormat.setInput(configuration, metadataFile);
     }
 
     /**
@@ -96,7 +81,7 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
 
         int currentIndex = 0;
 
-        LOG.info("Found " + fields.size() + " fields");
+        //LOG.info("Found " + fields.size() + " fields");
 
         for (HAWQField field : fields) {
             try {
@@ -121,6 +106,7 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
      * primitive type or an array type.
      *
      * @param record list of fields to be populated
+     * @param value HAWQRecord containing the actual data read
      * @param fieldType field data type (enum)
      * @return the number of populated fields
      */
@@ -128,8 +114,6 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
                        int index) throws HAWQException {
 
         int ret = 0;
-        //Object value = field.asPrimitive();
-        //boolean isArray = field.isArray();
         String sValue = null;
 
         switch (fieldType) {

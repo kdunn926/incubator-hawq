@@ -96,7 +96,7 @@ public class HAWQInputFormatAccessor extends Plugin implements
     }
 
     /**
-     * Fetches the requested fragment (file split) for the current client
+     * Fetches the requested fragment (HAWQAOSplit) for the current client
      * request, and sets a record reader for the job.
      *
      * @return true if succeeded, false if no more splits to be read
@@ -128,13 +128,8 @@ public class HAWQInputFormatAccessor extends Plugin implements
 
         HAWQAOSplit currSplit = iter.next();
 
-        // Round-peg square-hole the v1 MR API to v2
-        FileSplit convertedCurrSplit = 
-            new FileSplit(currSplit.getPath(), currSplit.getStart(), 
-                          currSplit.getLength(), currSplit.getLocations());
-
         reader.initialize(currSplit, taskContext); 
-        rowData = reader.getCurrentValue(); //createValue();
+        rowData = reader.getCurrentValue(); 
         return true;
     }
 
@@ -167,10 +162,10 @@ public class HAWQInputFormatAccessor extends Plugin implements
     }
 
     /**
-     * Parses fragment metadata and return matching {@link FileSplit}.
+     * Parses fragment metadata and return matching {@link HAWQAOSplit}.
      *
      * @param inputData request input data
-     * @return FileSplit with fragment metadata
+     * @return HAWAOSplit with fragment metadata
      */
     public static HAWQAOSplit parseFragmentMetadata(InputData inData) {
         try {

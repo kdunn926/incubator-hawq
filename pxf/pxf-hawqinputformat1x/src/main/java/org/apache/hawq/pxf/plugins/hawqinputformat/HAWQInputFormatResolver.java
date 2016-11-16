@@ -81,8 +81,6 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
 
         int currentIndex = 0;
 
-        //LOG.info("Found " + fields.size() + " fields");
-
         for (HAWQField field : fields) {
             try {
                 currentIndex += populateRecord(record, hawqRecord, field.asPrimitive().getType(), currentIndex + 1);
@@ -149,17 +147,17 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
                 break;
             // blank padded char is just a TEXT
             case BPCHAR:
-            	sValue = (value != null) ? String.format("%s", value.getString(index))
+                sValue = (value != null) ? String.format("%s", value.getString(index))
                         : null;
                 ret = addOneFieldToRecord(record, DataType.BPCHAR, sValue);
                 break;
             case VARCHAR:
-            	sValue = (value != null) ? String.format("%s", value.getString(index))
+                sValue = (value != null) ? String.format("%s", value.getString(index))
                         : null;
                 ret = addOneFieldToRecord(record, DataType.VARCHAR, sValue);
                 break;
             case TEXT:
-            	sValue = (value != null) ? String.format("%s", value.getString(index))
+                sValue = (value != null) ? String.format("%s", value.getString(index))
                         : null;
                 ret = addOneFieldToRecord(record, DataType.TEXT, sValue);
                 break;
@@ -210,7 +208,7 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
                 ret = addOneFieldToRecord(record, DataType.CIDR, value.getCidr(index));
                 break;
             case XML:
-            	sValue = (value != null) ? String.format("%s", value.getString(index))
+                sValue = (value != null) ? String.format("%s", value.getString(index))
                         : null;
                 ret = addOneFieldToRecord(record, DataType.XML, sValue);
                 break;
@@ -235,20 +233,20 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
         oneField.type = gpdbWritableType.getOID();
         switch (gpdbWritableType) {
             case BYTEA:
-        	case BIT:
-        	case VARBIT:
-        	case NUMERIC:
-        	case NAME:
-        	case CHAR:
-        	case BPCHAR:
-        	case VARCHAR:
-        	case TEXT:
-        	case XML:
-        	case TIMETZ:
-        	case INTERVAL:
-        	case MACADDR:
-        	case INET:
-        	case CIDR:
+            case BIT:
+            case VARBIT:
+            case NUMERIC:
+            case NAME:
+            case CHAR:
+            case BPCHAR:
+            case VARCHAR:
+            case TEXT:
+            case XML:
+            case TIMETZ:
+            case INTERVAL:
+            case MACADDR:
+            case INET:
+            case CIDR:
                 if (val instanceof ByteBuffer) {
                     oneField.val = ((ByteBuffer) val).array();
                 } else {

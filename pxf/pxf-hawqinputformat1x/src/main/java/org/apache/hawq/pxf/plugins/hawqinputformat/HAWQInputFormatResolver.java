@@ -36,9 +36,12 @@ import org.apache.hawq.pxf.api.utilities.InputData;
 import org.apache.hawq.pxf.api.utilities.Plugin;
 
 import com.pivotal.hawq.mapreduce.HAWQRecord;
+import com.pivotal.hawq.mapreduce.HAWQException;
 import com.pivotal.hawq.mapreduce.schema.HAWQField;
 import com.pivotal.hawq.mapreduce.schema.HAWQGroupField;
+import com.pivotal.hawq.mapreduce.schema.HAWQPrimitiveField;
 import com.pivotal.hawq.mapreduce.schema.HAWQSchema;
+import com.pivotal.hawq.mapreduce.schema.HAWQPrimitiveField.PrimitiveType;
 
 /**
  * Class HAWQInputFormatResolver handles deserialization of records that 
@@ -47,6 +50,14 @@ import com.pivotal.hawq.mapreduce.schema.HAWQSchema;
 public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
 
     private static final Log LOG = LogFactory.getLog(HAWQInputFormatResolver.class);
+
+    /*
+    public static enum PrimitiveType {
+        BOOL, BIT, VARBIT, BYTEA, INT2, INT4, INT8, FLOAT4, FLOAT8, NUMERIC,
+        CHAR, BPCHAR, VARCHAR, TEXT, DATE, TIME, TIMETZ, TIMESTAMP, TIMESTAMPTZ, INTERVAL,
+        POINT, LSEG, BOX, CIRCLE, PATH, POLYGON, MACADDR, INET, CIDR, XML
+    }
+    */
 
     /**
      * Constructs an HAWQInputFormatResolver. Initializes Avro data structure: the Avro
@@ -85,8 +96,18 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
 
         int currentIndex = 0;
 
+        LOG.info("Found " + fields.size() + " fields");
+
         for (HAWQField field : fields) {
-            currentIndex += populateRecord(record, field.asGroup(), schema);
+            try {
+                currentIndex += populateRecord(record, hawqRecord, field.asPrimitive().getType(), currentIndex + 1);
+            } catch (ClassCastException e) {
+                throw new Exception("Group fields are not supported yet.");
+                // TODO
+                //currentIndex += populateRecordGroup(record, field.asGroup(), schema);
+            } catch (HAWQException e) {
+                throw new Exception(e);
+            }
         }
         
         assert (currentIndex == fields.size());
@@ -100,110 +121,114 @@ public class HAWQInputFormatResolver extends Plugin implements ReadResolver {
      * primitive type or an array type.
      *
      * @param record list of fields to be populated
-     * @param fieldValue field value
-     * @param fieldSchema field schema
+     * @param fieldType field data type (enum)
      * @return the number of populated fields
      */
-    int populateRecord(List<OneField> record, HAWQGroupField field,
-                       HAWQSchema fieldSchema) {
+    int populateRecord(List<OneField> record, HAWQRecord value, PrimitiveType fieldType,
+                       int index) throws HAWQException {
 
-        String fieldType = field.getDataTypeName();
         int ret = 0;
-        Object value = field.asPrimitive();
+        //Object value = field.asPrimitive();
         //boolean isArray = field.isArray();
         String sValue = null;
 
         switch (fieldType) {
-            case "bool":
-                ret = addOneFieldToRecord(record, DataType.BOOLEAN, value);
+            case BOOL:
+                ret = addOneFieldToRecord(record, DataType.BOOLEAN, value.getBoolean(index));
                 break;
-            case "bit":
-                ret = addOneFieldToRecord(record, DataType.BIT, value);
+            case BIT:
+                ret = addOneFieldToRecord(record, DataType.BIT, value.getBit(index));
                 break;
-            case "varbit":
-                ret = addOneFieldToRecord(record, DataType.VARBIT, value);
+            case VARBIT:
+                ret = addOneFieldToRecord(record, DataType.VARBIT, value.getVarbit(index));
                 break;
-            case "int2":
-                ret = addOneFieldToRecord(record, DataType.SMALLINT, value);
+            case INT2:
+                ret = addOneFieldToRecord(record, DataType.SMALLINT, value.getShort(index));
                 break;
-            case "int4":
-                ret = addOneFieldToRecord(record, DataType.INTEGER, value);
+            case INT4:
+                ret = addOneFieldToRecord(record, DataType.INTEGER, value.getInt(index));
                 break;
-            case "int8":
-                ret = addOneFieldToRecord(record, DataType.BIGINT, value);
+            case INT8:
+                ret = addOneFieldToRecord(record, DataType.BIGINT, value.getLong(index));
                 break;
-            case "float4":
-                ret = addOneFieldToRecord(record, DataType.REAL, value);
+            case FLOAT4:
+                ret = addOneFieldToRecord(record, DataType.REAL, value.getFloat(index));
                 break;
-            case "float8":
-                ret = addOneFieldToRecord(record, DataType.FLOAT8, value);
+            case FLOAT8:
+                ret = addOneFieldToRecord(record, DataType.FLOAT8, value.getDouble(index));
                 break;
-            case "numeric":
-                ret = addOneFieldToRecord(record, DataType.NUMERIC, value);
+            case NUMERIC:
+                ret = addOneFieldToRecord(record, DataType.NUMERIC, value.getBigDecimal(index));
                 break;
-            case "char":
-                ret = addOneFieldToRecord(record, DataType.CHAR, value);
+            case CHAR:
+                ret = addOneFieldToRecord(record, DataType.CHAR, value.getByte(index));
                 break;
-            case "bpchar":
-                ret = addOneFieldToRecord(record, DataType.BPCHAR, value);
+            // blank padded char is just a TEXT
+            case BPCHAR:
+            	sValue = (value != null) ? String.format("%s", value.getString(index))
+                        : null;
+                ret = addOneFieldToRecord(record, DataType.BPCHAR, sValue);
                 break;
-            case "varchar":
-            	sValue = (value != null) ? String.format("%s", value)
+            case VARCHAR:
+            	sValue = (value != null) ? String.format("%s", value.getString(index))
                         : null;
                 ret = addOneFieldToRecord(record, DataType.VARCHAR, sValue);
                 break;
-            case "text":
-            	sValue = (value != null) ? String.format("%s", value)
+            case TEXT:
+            	sValue = (value != null) ? String.format("%s", value.getString(index))
                         : null;
                 ret = addOneFieldToRecord(record, DataType.TEXT, sValue);
                 break;
-            case "date":
-                ret = addOneFieldToRecord(record, DataType.DATE, value);
+            case DATE:
+                ret = addOneFieldToRecord(record, DataType.DATE, value.getDate(index));
                 break;
-            case "time":
-                ret = addOneFieldToRecord(record, DataType.TIME, value);
+            case TIME:
+                ret = addOneFieldToRecord(record, DataType.TIME, value.getTime(index));
                 break;
-            case "timez":
-                ret = addOneFieldToRecord(record, DataType.TIMETZ, value);
+            // TODO implement getTimetz in com.pivotal.hawq.mapreduce.HAWQRecord
+            //case TIMETZ:
+            //    ret = addOneFieldToRecord(record, DataType.TIMETZ, value);
+            //    break;
+            case TIMESTAMP:
+                ret = addOneFieldToRecord(record, DataType.TIMESTAMP, value.getTimestamp(index));
                 break;
-            case "timestamp":
-                ret = addOneFieldToRecord(record, DataType.TIMESTAMP, value);
+            //case TIMESTAMPTZ:
+            //    ret = addOneFieldToRecord(record, DataType.TIMESTAMPTZ, value);
+            //    break;
+            case INTERVAL:
+                ret = addOneFieldToRecord(record, DataType.INTERVAL, value.getInterval(index));
                 break;
-            case "timestampz":
-                ret = addOneFieldToRecord(record, DataType.TIMESTAMPTZ, value);
+            case POINT:
+                ret = addOneFieldToRecord(record, DataType.POINT, value.getPoint(index));
                 break;
-            case "interval":
-                ret = addOneFieldToRecord(record, DataType.INTERVAL, value);
+            case LSEG:
+                ret = addOneFieldToRecord(record, DataType.LSEG, value.getLseg(index));
                 break;
-            case "point":
-                ret = addOneFieldToRecord(record, DataType.POINT, value);
+            case BOX:
+                ret = addOneFieldToRecord(record, DataType.BOX, value.getBox(index));
                 break;
-            case "lseg":
-                ret = addOneFieldToRecord(record, DataType.LSEG, value);
+            case CIRCLE:
+                ret = addOneFieldToRecord(record, DataType.CIRCLE, value.getCircle(index));
                 break;
-            case "box":
-                ret = addOneFieldToRecord(record, DataType.BOX, value);
+            case PATH:
+                ret = addOneFieldToRecord(record, DataType.PATH, value.getPath(index));
                 break;
-            case "circle":
-                ret = addOneFieldToRecord(record, DataType.CIRCLE, value);
+            case POLYGON:
+                ret = addOneFieldToRecord(record, DataType.POLYGON, value.getPolygon(index));
                 break;
-            case "path":
-                ret = addOneFieldToRecord(record, DataType.PATH, value);
+            case MACADDR:
+                ret = addOneFieldToRecord(record, DataType.MACADDR, value.getMacaddr(index));
                 break;
-            case "polygon":
-                ret = addOneFieldToRecord(record, DataType.POLYGON, value);
+            case INET:
+                ret = addOneFieldToRecord(record, DataType.INET, value.getInet(index));
                 break;
-            case "macaddr":
-                ret = addOneFieldToRecord(record, DataType.MACADDR, value);
+            case CIDR:
+                ret = addOneFieldToRecord(record, DataType.CIDR, value.getCidr(index));
                 break;
-            case "inet":
-                ret = addOneFieldToRecord(record, DataType.INET, value);
-                break;
-            case "cidr":
-                ret = addOneFieldToRecord(record, DataType.CIDR, value);
-                break;
-            case "xml":
-                ret = addOneFieldToRecord(record, DataType.XML, value);
+            case XML:
+            	sValue = (value != null) ? String.format("%s", value.getString(index))
+                        : null;
+                ret = addOneFieldToRecord(record, DataType.XML, sValue);
                 break;
             default:
                 break;

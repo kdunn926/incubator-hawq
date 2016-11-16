@@ -19,10 +19,10 @@ package org.apache.hawq.pxf.plugins.hawqinputformat;
  * under the License.
  */
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -105,8 +105,8 @@ public class HAWQInputFormatFragmenter extends Fragmenter {
             // metadata information includes: file split's start, length and
             // hosts (locations).
             //
-            //byte[] fragmentMetadata = HdfsUtilities.prepareFragmentMetadata(split);
-            Fragment fragment = new Fragment(filepath, hosts, new byte[0]);
+            byte[] fragmentMetadata = prepareFragmentMetadata((HAWQAOSplit) split);
+            Fragment fragment = new Fragment(filepath, hosts, fragmentMetadata);
             fragments.add(fragment);
         }
 
@@ -115,5 +115,19 @@ public class HAWQInputFormatFragmenter extends Fragmenter {
         return fragments;
     }
 
+    private static byte[] prepareFragmentMetadata(HAWQAOSplit fsp)
+            throws IOException {
+        ByteArrayOutputStream byteArrayStream = new ByteArrayOutputStream();
+        ObjectOutputStream objectStream = new ObjectOutputStream(
+                byteArrayStream);
+        objectStream.writeLong(fsp.getStart());
+        objectStream.writeLong(fsp.getLength());
+        objectStream.writeObject(fsp.getLocations());
+        objectStream.writeBoolean(fsp.getChecksum());
+        objectStream.writeInt(fsp.getBlockSize());
+        objectStream.writeObject(fsp.getCompressType());
+
+        return byteArrayStream.toByteArray();
+    }
 
 }

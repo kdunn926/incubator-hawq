@@ -121,12 +121,50 @@ s3_connect(PG_FUNCTION_ARGS /*FsysName protocol, char * host, uint16_t port, cha
     // mount point, and performing the mount if it's not there
     // (this likely depends on a symlink from /sbin/mount.s3fs to /opt/s3fs/bin/s3fs)
 
+    char *host = NULL;
+    int port = 0;
+    hdfsFS fsObj = NULL;
+    int retval = 0;
+    void *token = NULL;
+    char *ccname = NULL;
+
+    /* Must be called via the filesystem manager */
+    if (!CALLED_AS_GPFILESYSTEM(fcinfo)) {
+        elog(WARNING, "cannot execute s3_connect outside filesystem manager");
+        retval = -1;
+        errno = EINVAL;
+        PG_RETURN_INT32(retval);
+    }
+
+    host = FSYS_UDF_GET_HOST(fcinfo);
+    port = FSYS_UDF_GET_PORT(fcinfo);
+    token = FSYS_UDF_GET_TOKEN(fcinfo);
+    ccname = FSYS_UDF_GET_CCNAME(fcinfo);
+
+    if (NULL == host) {
+        elog(WARNING, "get host invalid in s3_connect");
+        retval = -1;
+        errno = EINVAL;
+        PG_RETURN_INT32(retval);
+    }
+
 
     /*
     int mount(const char *source, const char *target,
               const char *filesystemtype, unsigned long mountflags,
               const void *data);
     */
+
+
+    // TODO
+    // fsObj =  fuseMountBuilder(builder);
+
+    if (NULL == fsObj) {
+        retval = -1;
+    }
+    FSYS_UDF_SET_HDFS(fcinfo, fsObj);
+
+    PG_RETURN_INT32(retval);
 
 }
 
@@ -135,9 +173,31 @@ Datum
 s3_disconnect(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem*/) 
 {
 
+    int retval = 0;
+    hdfsFS fsObj = NULL;
+
+    /* Must be called via the filesystem manager */
+    if (!CALLED_AS_GPFILESYSTEM(fcinfo)) {
+        elog(WARNING, "cannot execute s3_disconnect outside filesystem manager");
+        retval = -1;
+        errno = EINVAL;
+        PG_RETURN_INT32(retval);
+    }
+
+    fsObj = FSYS_UDF_GET_HDFS(fcinfo);
+
+    if (NULL == fsObj) {
+        elog(WARNING, "get hdfs invalid in s3_disconnect");
+        retval = -1;
+        errno = EINVAL;
+        PG_RETURN_INT32(retval);
+    }
+
     // Function should try to unmount the s3fs mountpoint
 
-    int umount(const char *target);
+    retval = umount("/mnt/s3/hawq" /* const char *target*/);
+
+    PG_RETURN_INT32(retval);
 
 }
 
@@ -206,15 +266,13 @@ s3_open(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, char * path, in
         // map flags code -> mode string
 
 
-        /*
         const char* mode = "w+";
 
         FILE * stream = fopen(path, mode);
 
         hFile = new HdfsFileInternalWrapper();
-        hFile->setInput(true);
+        hFile->setInput(false);
         hFile->setStream(stream);
-        */ 
 
         /// -----------
 
@@ -473,11 +531,10 @@ s3_fread(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file,
 
 
     // TODO
-    //FILE * stream = hfile->getInputStream();
+    FILE * stream = hFile->getInputStream();
 
     // Write to ptr buffer, size is the size of each element, nmemb is the length / numElements
-    //return (int) fread(void *ptr, size_t size, size_t nmemb, FILE *stream);
-    retval = -1;
+    retval = (int) fread((void*) buf, (size_t) 1, (size_t) length, stream);
 
     PG_RETURN_INT32(retval);
 
@@ -532,12 +589,14 @@ s3_fwrite(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file
 
     // TODO
 
-    //FILE * stream = hFile->getInputStream();
+    FILE * stream = hFile->getOutputStream();
 
     // Write from ptr buffer, size is the size of each element, nmemb is the length / numElements
     //return (int) fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
 
-    retval = -1;
+    const short oneByte = 1;
+
+    retval = fwrite((void *)buf, (size_t)oneByte, (size_t)length, stream);
 
     PG_RETURN_INT32(retval);
 }
@@ -672,6 +731,85 @@ s3_truncate(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, char * path
     PG_RETURN_INT32(retval);
 }
 
+void
+populateFileInfoFromStatStruct(struct stat * statInfo, char * name, hdfsFileInfo * fileInfo)
+{
+
+    fileInfo->mKind = S_ISDIR(statInfo->st_mode) ? (tObjectKind) 'D' : (tObjectKind) 'F' ;
+    fileInfo->mName = name ;
+    fileInfo->mLastMod = statInfo->st_mtime ;
+    fileInfo->mSize = statInfo->st_size ;
+    fileInfo->mReplication = 1;
+    fileInfo->mBlockSize = 1;
+    fileInfo->mOwner = " " ; /*TODO uid->name lookup statInfo->st_uid */
+    fileInfo->mGroup = " " ; /* statInfo->st_gid */
+    fileInfo->mPermissions = statInfo->st_mode ;
+    fileInfo->mLastAccess = statInfo->st_atime ;
+    //fileInfo->mHdfsEncryptionFileInfo = NULL;
+
+}
+
+void
+buildFileInfoArray(char * path, hdfsFileInfo * fileInfo)
+{
+    struct stat st;
+
+    lstat(path, &st);
+
+    if (S_ISREG(st.st_mode)) {
+        fileInfo = new hdfsFileInfo();
+        populateFileInfoFromStatStruct(&st, path, fileInfo);
+        return;
+    }
+    // TODO else we need to go recursive and malloc a bunch of stuff
+    //
+}
+
+/*
+static long goDir(char *dirname)
+{
+    DIR *dir = opendir(dirname);
+    if (dir == 0)
+        return 0;
+
+    struct dirent *dit;
+    struct stat st;
+    long size = 0;
+    long total_size = 0;
+    char filePath[NAME_MAX];
+
+    while ((dit = readdir(dir)) != NULL)
+    {
+        if ( (strcmp(dit->d_name, ".") == 0) || (strcmp(dit->d_name, "..") == 0) )
+            continue;
+
+        sprintf(filePath, "%s/%s", dirname, dit->d_name);
+        if (lstat(filePath, &st) != 0)
+            continue;
+        size = st.st_size;
+
+        if (S_ISDIR(st.st_mode))
+        {
+            long dir_size = goDir(filePath) + size;
+            printf("DIR\t");
+            printf("MODE: %lo\t", (unsigned long) st.st_mode);
+            printf("SIZE: %ld\t", dir_size);
+            printf("%s\n", filePath);
+            total_size += dir_size;
+        }
+        else
+        {
+            total_size += size;
+            printf("FILES\t");
+            printf("MODE: %lo\t", (unsigned long) st.st_mode);
+            printf("SIZE: %ld\t", size);
+            printf("%s\n", filePath);
+        }
+    }
+    return total_size;
+}
+*/
+
 Datum 
 s3_fstat(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, char * path */) 
 {
@@ -703,14 +841,9 @@ s3_fstat(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, char * path */
         PG_RETURN_INT32(retval);
     }
 
-    // TODO
+    // TODO - need to handle file info for directories
 
-    //struct stat buf = (truct stat *)malloc(sizeof(stat));
-
-    //int retVal = stat(const char *path, struct stat *buf);
-
-    // convert stat struct into hdfsFileInfo, something like this
-    //fileInfo = statStructToFileInfoArray();
+    buildFileInfoArray(path, fileinfo);
 
     if (NULL == fileinfo) {
         retval = -1;
@@ -753,9 +886,16 @@ s3_free_fstat(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFileInfo * hdfsFileInfo,
         PG_RETURN_INT64(retval);
     }
 
-    // TODO
-    //free() memory created by s3_fstat()
-
+    // TODO - need to handle list of these
+    if (numEntries > 1) {
+        return -1;
+    }
+    else if (numEntries == 0) {
+        return -1;
+    }
+    else {
+        delete fileinfo;
+    }
 
     PG_RETURN_INT64(retval);
     return -1;

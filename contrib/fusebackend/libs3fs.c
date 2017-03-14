@@ -115,6 +115,11 @@ struct HdfsFileInternalWrapper {
 };
 */
 
+typedef struct fuseFile_ {
+    char isInput;
+    FILE* stream;
+} fuseFile;
+
 Datum 
 s3_connect(PG_FUNCTION_ARGS /*FsysName protocol, char * host, uint16_t port, char *ccname, void *token*/ ) 
 {
@@ -219,7 +224,7 @@ s3_open(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, char * path, in
     int bufferSize = 0;
     short rep = 0;
     int64_t blocksize = 0;
-    hdfsFile hFile = NULL;
+    fuseFile * hFile = NULL;
     int numRetry = 300;
     long sleepTime = 0; //micro seconds
     const long maxSleep = 1 * 1000 * 1000; //1 seconds
@@ -274,11 +279,11 @@ s3_open(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, char * path, in
 
         const char* mode = "w+";
 
-        //FILE * stream = fopen(path, mode);
+        FILE * stream = fopen(path, mode);
 
-        //hFile = new HdfsFileInternalWrapper();
-        //hFile->setInput(0);
-        //hFile->setStream(stream);
+        hFile = (fuseFile*)malloc(sizeof(fuseFile));
+        hFile->isInput = 0;
+        hFile->stream = stream;
 
         /// -----------
 
@@ -299,7 +304,7 @@ s3_sync(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file*/
 {
     int retval = 0;
     hdfsFS fsObj = NULL;
-    hdfsFile hFile = NULL;
+    fuseFile *hFile = NULL;
 
     /* Must be called via the filesystem manager */
     if (!CALLED_AS_GPFILESYSTEM(fcinfo)) {
@@ -318,15 +323,15 @@ s3_sync(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file*/
         PG_RETURN_INT32(retval);
     }
     if (NULL == hFile) {
-        elog(WARNING, "get hdfsFile invalid in s3_sync");
+        elog(WARNING, "get fuseFile invalid in s3_sync");
         retval = -1;
         errno = EINVAL;
         PG_RETURN_INT32(retval);
     }
 
     //
-    //FILE * fd = hFile->getInputStream();
-    retval = -1 ; //fflush(fd);
+    FILE * fd = hFile->stream;
+    retval = fflush(fd);
     ///
 
     PG_RETURN_INT32(retval);
@@ -334,12 +339,12 @@ s3_sync(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file*/
 }
 
 Datum 
-s3_close(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file*/) 
+s3_close(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, fuseFile file*/) 
 {
 
     int retval = 0;
     hdfsFS fsObj = NULL;
-    hdfsFile hFile = NULL;
+    fuseFile *hFile = NULL;
 
     /* Must be called via the filesystem manager */
     if (!CALLED_AS_GPFILESYSTEM(fcinfo)) {
@@ -358,14 +363,17 @@ s3_close(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file*
         PG_RETURN_INT32(retval);
     }
     if (NULL == hFile) {
-        elog(WARNING, "get hdfsFile invalid in s3_closefile");
+        elog(WARNING, "get fuseFile invalid in s3_closefile");
         retval = -1;
         errno = EINVAL;
         PG_RETURN_INT32(retval);
     }
 
-    //FILE * fd = hFile->getInputStream();
-    retval = -1 ; // fclose(fd);
+    FILE * fd = hFile->stream;
+    retval = fclose(fd);
+    // TODO check stuff
+
+    free(hFile);
 
     PG_RETURN_INT32(retval);
 }
@@ -494,7 +502,7 @@ s3_fread(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file,
 
     int retval = 0;
     hdfsFS fsObj = NULL;
-    hdfsFile hFile = NULL;
+    fuseFile * hFile = NULL;
     char *buf = NULL;
     int length = 0;
 
@@ -517,7 +525,7 @@ s3_fread(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file,
         PG_RETURN_INT32(retval);
     }
     if (NULL == hFile) {
-        elog(WARNING, "get hdfsFile invalid in s3_read");
+        elog(WARNING, "get fuseFile invalid in s3_read");
         retval = -1;
         errno = EINVAL;
         PG_RETURN_INT32(retval);
@@ -537,10 +545,10 @@ s3_fread(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file,
 
 
     // TODO
-    // FILE * stream = hFile->getInputStream();
+    FILE * stream = hFile->stream;
 
     // Write to ptr buffer, size is the size of each element, nmemb is the length / numElements
-    retval = -1; // (int) fread((void*) buf, (size_t) 1, (size_t) length, stream);
+    retval = (int) fread((void*) buf, (size_t) 1, (size_t) length, stream);
 
     PG_RETURN_INT32(retval);
 
@@ -552,7 +560,7 @@ s3_fwrite(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file
 
     int retval = 0;
     hdfsFS fsObj = NULL;
-    hdfsFile hFile = NULL;
+    fuseFile *hFile = NULL;
     char *buf = NULL;
     int length = 0;
 
@@ -575,7 +583,7 @@ s3_fwrite(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file
         PG_RETURN_INT32(retval);
     }
     if (NULL == hFile) {
-        elog(WARNING, "get hdfsFile invalid in s3_write");
+        elog(WARNING, "get fuseFile invalid in s3_write");
         retval = -1;
         errno = EINVAL;
         PG_RETURN_INT32(retval);
@@ -595,25 +603,25 @@ s3_fwrite(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file
 
     // TODO
 
-    // FILE * stream = hFile->getOutputStream();
+    FILE * stream = hFile->stream;
 
     // Write from ptr buffer, size is the size of each element, nmemb is the length / numElements
     //return (int) fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
 
     const short oneByte = 1;
 
-    retval = -1; // fwrite((void *)buf, (size_t)oneByte, (size_t)length, stream);
+    retval = fwrite((void *)buf, (size_t)oneByte, (size_t)length, stream);
 
     PG_RETURN_INT32(retval);
 }
 
 Datum 
-s3_fseek(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file, int64_t desiredPos */) 
+s3_fseek(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, fuseFile file, int64_t desiredPos */) 
 {
 
     int retval = 0;
     hdfsFS fsObj = NULL;
-    hdfsFile hFile = NULL;
+    fuseFile *hFile = NULL;
     int64_t pos = 0;
 
     /* Must be called via the filesystem manager */
@@ -634,7 +642,7 @@ s3_fseek(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file,
         PG_RETURN_INT64(retval);
     }
     if (NULL == hFile) {
-        elog(WARNING, "get hdfsFile invalid in s3_seek");
+        elog(WARNING, "get fuseFile invalid in s3_seek");
         retval = -1;
         errno = EINVAL;
         PG_RETURN_INT64(retval);
@@ -646,10 +654,10 @@ s3_fseek(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file,
         PG_RETURN_INT64(retval);
     }
 
-    //FILE * stream = hFile->getInputStream();
+    FILE * stream = hFile->stream;
 
     // Should be relative to start of the file
-    retval = -1; // fseek(stream, (long) pos, SEEK_SET);
+    retval = fseek(stream, (long) pos, SEEK_SET);
 
     PG_RETURN_INT64(retval);
 }
@@ -660,7 +668,7 @@ s3_ftell(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file 
 
     int64_t retval = 0;
     hdfsFS fsObj = NULL;
-    hdfsFile hFile = NULL;
+    fuseFile *hFile = NULL;
 
     /* Must be called via the filesystem manager */
     if (!CALLED_AS_GPFILESYSTEM(fcinfo)) {
@@ -679,15 +687,15 @@ s3_ftell(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, hdfsFile file 
         PG_RETURN_INT64(retval);
     }
     if (NULL == hFile) {
-        elog(WARNING, "get hdfsFile invalid in s3_tell");
+        elog(WARNING, "get fuseFile invalid in s3_tell");
         retval = -1;
         errno = EINVAL;
         PG_RETURN_INT64(retval);
     }
 
-    // FILE * stream = hFile->getInputStream();
+    FILE * stream = hFile->stream;
 
-    retval = -1; // (int64_t) ftell(stream);
+    retval = (int64_t) ftell(stream);
 
     PG_RETURN_INT64(retval);
 }
@@ -720,7 +728,7 @@ s3_truncate(PG_FUNCTION_ARGS /*FsysName protocol, hdfsFS fileSystem, char * path
         PG_RETURN_INT32(retval);
     }
     if (NULL == path) {
-        elog(WARNING, "get hdfsFile invalid in s3_truncate");
+        elog(WARNING, "get fuseFile invalid in s3_truncate");
         retval = -1;
         errno = EINVAL;
         PG_RETURN_INT32(retval);
